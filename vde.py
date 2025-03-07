@@ -13,6 +13,10 @@ from isodate import parse_duration, parse_datetime
 from openpyxl import Workbook, load_workbook
 
 LOGGER = logging.getLogger(__name__)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter(
+    '%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
+LOGGER.addHandler(handler)
 
 
 class DefaultSettings:
@@ -101,9 +105,9 @@ class Settings(DefaultSettings):
         if excludeKeys is not None:
             self.ExcludeKeysRegex = re.compile(excludeKeys)
 
-        if verbose == 1:
+        if verbose >= 1:
             log_level = logging.INFO
-        elif verbose >= 2:
+        if verbose >= 2:
             log_level = logging.DEBUG
 
         LOGGER.setLevel(log_level)
@@ -235,7 +239,7 @@ class Settings(DefaultSettings):
         if len(base_pipeline) > 0:
             if base_pipeline[-1].get("$sort", None) is not None:
                 base_pipeline.pop()
-        
+
         base_pipeline.extend(bucket_stages)
         self.Pipeline = base_pipeline
         print(f"Bucket Pipeline: {self.Pipeline}")
@@ -269,7 +273,8 @@ class Settings(DefaultSettings):
             raise ValueError("Cannot specify --start, --end, and --duration")
         # if none are specified, set defaults
         if self.Start is None and self.End is None and self.Duration is None:
-            LOGGER.debug("--start, --end, and --duration not specified, defaulting to 1 day ago and now")
+            LOGGER.debug(
+                "--start, --end, and --duration not specified, defaulting to 1 day ago and now")
             self.End = datetime.now()
             self.Start = self.End - timedelta(days=1)
         # if only start and duration are specified, calculate end
@@ -277,7 +282,8 @@ class Settings(DefaultSettings):
             LOGGER.debug("--start and --duration specified, calculating end")
             self.End = self.Start + self.Duration
         if self.Start is not None and self.End is None and self.Duration is None:
-            LOGGER.debug("--end and --duration not specified, defaulting to now")
+            LOGGER.debug(
+                "--end and --duration not specified, defaulting to now")
             self.End = datetime.now()
         # if only end and duration are specified, calculate start
         if self.End is not None and self.Duration is not None:
@@ -290,11 +296,14 @@ class Settings(DefaultSettings):
 
         if self.Command == 'excel':
             if self.OutputFile is None and self.InputFile is None:
-                raise ValueError("--output or --input is required for Excel export")
+                raise ValueError(
+                    "--output or --input is required for Excel export")
             if self.OutputFile is not None and self.InputFile is not None:
-                raise ValueError("--output and --input cannot be specified together")
+                raise ValueError(
+                    "--output and --input cannot be specified together")
             if self.InputFile is not None and self.Tab is None:
-                LOGGER.warning("--input specified without --tab, will default to active tab, data loss may occurr")
+                LOGGER.warning(
+                    "--input specified without --tab, will default to active tab, data loss may occurr")
 
         # Build the filter if the pipeline is not specified
         if self.Pipeline is None:
@@ -356,7 +365,8 @@ class DataExporter:
                                 help='Bucketing Method for the data (min, max, avg, first, last)')
 
         file_group = parser.add_argument_group('File Settings')
-        file_exclusive_group = file_group.add_mutually_exclusive_group(required=True)
+        file_exclusive_group = file_group.add_mutually_exclusive_group(
+            required=True)
         file_exclusive_group.add_argument(
             '--output', type=str, help='Output file path')
         file_exclusive_group.add_argument(
@@ -367,6 +377,7 @@ class DataExporter:
         miscellaneous_group = parser.add_argument_group('Miscellaneous')
         miscellaneous_group.add_argument(
             '--timezone', type=str, default='UTC', help='Timezone to convert timestamps to')
+
 
 class Excel(DataExporter):
     client: DataClient
@@ -389,12 +400,11 @@ class Excel(DataExporter):
             if self.settings.Tab is not None:
                 if self.settings.Tab in wb.sheetnames:
                     wb.worksheets.remove(wb[self.settings.Tab])
-                ws = wb.create_sheet(self.settings.Tab)
-                ws = wb[self.settings.Tab]
-                wb.active = ws
         else:
             wb = Workbook()
-        ws = wb.active
+        ws = wb.create_sheet(self.settings.Tab)
+        ws = wb[self.settings.Tab]
+        wb.active = ws
 
         # Save the workbook to the specified output file
         wb.save(save_file)
@@ -403,6 +413,7 @@ class Excel(DataExporter):
         limit = 1000
         data = []
         while True:
+            LOGGER.info(f"Retrieving data from {skip} to {skip + limit}")
             pipeline = self.settings.Pipeline.copy()
             pipeline.append({"$skip": skip})
             pipeline.append({"$limit": limit})
@@ -415,6 +426,7 @@ class Excel(DataExporter):
             if batchLen < limit:  # We less than the limit, so we are done
                 break
             skip += limit
+            LOGGER.info(f"Retrieved {limit} records")
 
         # Assuming data is a list of dictionaries, write headers
         if data:
@@ -431,7 +443,8 @@ class Excel(DataExporter):
                 local_time_received = utc_time_received.astimezone(
                     tz=self.settings.Timezone)
                 try:
-                    row_values = [local_time_received.replace(tzinfo=None)] + [row["data"]["readings"][key] for key in data_keys]
+                    row_values = [local_time_received.replace(
+                        tzinfo=None)] + [row["data"]["readings"][key] for key in data_keys]
                     ws.append(row_values)
                 except Exception as e:
                     LOGGER.warning(f"Erroring exporting row error: {e}")
@@ -439,12 +452,14 @@ class Excel(DataExporter):
 
             wb.save(save_file)
 
+
 def floor_timestamp(ts, bucket_td):
     # Use a fixed reference point (Unix epoch)
     epoch = datetime(1970, 1, 1)
     # Calculate the number of complete buckets since the epoch
     bucket_count = (ts - epoch) // bucket_td
     return epoch + bucket_count * bucket_td
+
 
 def bucket_data(settings: Settings, data: list) -> list:
     bucketed_data = {}
@@ -478,12 +493,14 @@ def bucket_data(settings: Settings, data: list) -> list:
             elif settings.BucketMethod == "last":
                 aggregated_reading[key] = values[-1]
             else:
-                raise ValueError(f"Unsupported bucket method: {settings.BucketMethod}")
+                raise ValueError(
+                    f"Unsupported bucket method: {settings.BucketMethod}")
         aggregated_data.append({
             "time_received": bucket,
             "data": {"readings": aggregated_reading}
         })
     return aggregated_data
+
 
 class CSV(DataExporter):
     def __init__(self):
