@@ -136,7 +136,7 @@ class Settings(DefaultSettings):
             },
             {
                 "$sort": {
-                    "time_received": -1
+                    "time_received": 1
                 }
             }
         ]
@@ -392,18 +392,24 @@ class Excel(DataExporter):
         super().register_with_cli(parser)
 
     async def ExportAsync(self):
-        save_file = self.settings.OutputFile
+        sheet_name = self.settings.Tab
+        if sheet_name is None:
+            sheet_name = "Sheet1"
+
         # Create a new workbook and select the active worksheet
+        save_file = self.settings.OutputFile
+
         if self.settings.InputFile:
             save_file = self.settings.InputFile
             wb = load_workbook(self.settings.InputFile)
-            if self.settings.Tab is not None:
-                if self.settings.Tab in wb.sheetnames:
-                    wb.worksheets.remove(wb[self.settings.Tab])
         else:
             wb = Workbook()
-        ws = wb.create_sheet(self.settings.Tab)
-        ws = wb[self.settings.Tab]
+        
+        if sheet_name in wb.sheetnames:
+            wb.worksheets.remove(wb[sheet_name])
+
+        ws = wb.create_sheet(sheet_name)
+        ws = wb[sheet_name]
         wb.active = ws
 
         # Save the workbook to the specified output file
