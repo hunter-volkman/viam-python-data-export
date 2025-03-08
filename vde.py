@@ -406,14 +406,14 @@ class Excel(DataExporter):
             wb = Workbook()
         
         if sheet_name in wb.sheetnames:
-            wb.worksheets.remove(wb[sheet_name])
+            LOGGER.info(f"deleting existing sheet {sheet_name}")
+            del wb[sheet_name]
 
+        LOGGER.info(f"Creating sheet {sheet_name}")
         ws = wb.create_sheet(sheet_name)
         ws = wb[sheet_name]
         wb.active = ws
 
-        # Save the workbook to the specified output file
-        wb.save(save_file)
         # we need to paginate the data now...
         skip = 0
         limit = 1000
@@ -440,21 +440,33 @@ class Excel(DataExporter):
                 data = bucket_data(self.settings, data)
             data_keys = sorted(data[0]["data"]["readings"].keys())
             headers = ["time_received"] + data_keys
-            ws.append(headers)
-
+            for col_idx, header in enumerate(headers, 1):
+                ws.cell(row=1, column=col_idx, value=header)
+            
+            row_idx = 2
             # Write data rows
             for row in data:
                 time_received = row["time_received"]  # type: datetime
                 utc_time_received = time_received.replace(tzinfo=pytz.utc)
                 local_time_received = utc_time_received.astimezone(
                     tz=self.settings.Timezone)
-                try:
-                    row_values = [local_time_received.replace(
-                        tzinfo=None)] + [row["data"]["readings"][key] for key in data_keys]
-                    ws.append(row_values)
-                except Exception as e:
-                    LOGGER.warning(f"Erroring exporting row error: {e}")
-                    LOGGER.warning(f"Row: {row}")
+                keys = row["data"]["readings"].keys()
+                if len(data_keys) < len(keys):
+                    LOGGER.info(f"Updating data keys: {data_keys} vs {keys}")
+                    new_keys = sorted(set(data_keys).union(set(keys)))
+                    new_headers = ["time_received"] + new_keys
+                    for col_idx, header in enumerate(new_headers, 1):
+                        ws.cell(row=1, column=col_idx, value=header)
+                    data_keys = new_keys
+                ws.cell(row=row_idx, column=1, value=local_time_received.replace(tzinfo=None))
+                for col_idx, key in enumerate(data_keys, 2):
+                    try:
+                        if "data" in row and "readings" in row["data"] and key in row["data"]["readings"]:
+                            value = row["data"]["readings"][key]
+                            ws.cell(row=row_idx, column=col_idx, value=value)
+                    except Exception as e:
+                        LOGGER.warning(f"Error writing value for key {key}: {e}")
+                row_idx += 1
 
             wb.save(save_file)
 
