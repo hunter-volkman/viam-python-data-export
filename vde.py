@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import pytz
+import numpy as np
 from datetime import datetime, timedelta
 from viam.app.viam_client import ViamClient, DataClient
 from viam.rpc.dial import DialOptions, Credentials
@@ -404,7 +405,7 @@ class Excel(DataExporter):
             wb = load_workbook(self.settings.InputFile)
         else:
             wb = Workbook()
-        
+       
         if sheet_name in wb.sheetnames:
             LOGGER.info(f"deleting existing sheet {sheet_name}")
             del wb[sheet_name]
@@ -442,7 +443,7 @@ class Excel(DataExporter):
             headers = ["time_received"] + data_keys
             for col_idx, header in enumerate(headers, 1):
                 ws.cell(row=1, column=col_idx, value=header)
-            
+           
             row_idx = 2
             # Write data rows
             for row in data:
@@ -510,6 +511,10 @@ def bucket_data(settings: Settings, data: list) -> list:
                 aggregated_reading[key] = values[0]
             elif settings.BucketMethod == "last":
                 aggregated_reading[key] = values[-1]
+            elif settings.BucketMethod == "pct95":
+                aggregated_reading[key] = np.percentile(values, 95)
+            elif settings.BucketMethod == "pct99":
+                aggregated_reading[key] = np.percentile(values, 99)
             else:
                 raise ValueError(
                     f"Unsupported bucket method: {settings.BucketMethod}")
