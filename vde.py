@@ -181,60 +181,7 @@ class Settings(DefaultSettings):
                 }
             },
             {"$unwind": "$readings_array"},
-            {"$unwind": "$readings_array"},
-            # # Group again to calculate max for each key
-            # {
-            #     "$group": {
-            #         "_id": {
-            #             "time_bucket": "$_id.time_bucket",
-            #             "location_id": "$_id.location_id",
-            #             "robot_id": "$_id.robot_id",
-            #             "part_id": "$_id.part_id",
-            #             "component_name": "$_id.component_name",
-            #             "organization_id": "$_id.organization_id",
-            #             "method_name": "$_id.method_name",
-            #             "key": "$readings_array.k"
-            #         },
-            #         "time_start": {"$first": "$time_start"},
-            #         "time_end": {"$first": "$time_end"},
-            #         "count": {"$first": "$count"},
-            #         # Apply the selected aggregation method
-            #         "value": self._get_aggregation_operator("$readings_array.v")
-            #     }
-            # },
-            # # Group to reconstruct the readings object
-            # {
-            #     "$group": {
-            #         "_id": {
-            #             "time_bucket": "$_id.time_bucket",
-            #             "location_id": "$_id.location_id",
-            #             "robot_id": "$_id.robot_id",
-            #             "part_id": "$_id.part_id",
-            #             "component_name": "$_id.component_name",
-            #             "organization_id": "$_id.organization_id",
-            #             "method_name": "$_id.method_name"
-            #         },
-            #         "time_start": {"$first": "$time_start"},
-            #         "time_end": {"$first": "$time_end"},
-            #         "count": {"$first": "$count"},
-            #         "readings": {"$push": {"k": "$_id.key", "v": "$value"}}
-            #     }
-            # },
-            # # Convert the array back to an object
-            # {
-            #     "$project": {
-            #         "time_received": "$_id.time_bucket",  # Use the truncated date as time_received
-            #         "part_id": "$_id.part_id",
-            #         "organization_id": "$_id.organization_id",
-            #         "method_name": "$_id.method_name",
-            #         "location_id": "$_id.location_id",
-            #         "robot_id": "$_id.robot_id",
-            #         "component_name": "$_id.component_name",
-            #         "data": {"readings": {"$arrayToObject": "$readings"}}
-            #     }
-            # },
-            # # Sort by time_received
-            # {"$sort": {"time_received": 1}}
+            {"$unwind": "$readings_array"}
         ]
 
         if len(base_pipeline) > 0:
@@ -244,24 +191,6 @@ class Settings(DefaultSettings):
         base_pipeline.extend(bucket_stages)
         self.Pipeline = base_pipeline
         print(f"Bucket Pipeline: {self.Pipeline}")
-
-    def _get_aggregation_operator(self, field):
-        """Return the appropriate aggregation operator based on bucket method."""
-        method = self.BucketMethod.lower()
-        if method == "max":
-            return {"$max": field}
-        elif method == "min":
-            return {"$min": field}
-        elif method == "avg":
-            return {"$avg": field}
-        elif method == "first":
-            return {"$first": field}
-        elif method == "last":
-            return {"$last": field}
-        elif method == "sum":
-            return {"$sum": field}
-        else:
-            raise ValueError(f"Unsupported bucket method: {method}")
 
     def validate(self):
         # Check if both pipeline and filter options are specified
